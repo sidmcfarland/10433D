@@ -12,7 +12,7 @@ const FOG_GLSL = `
   uniform vec3 uFog; uniform float uAlt;
   vec3 haze(vec3 c, vec3 w){
     float d = length(cameraPosition - w);
-    float f = 1.0 - exp(-d * 0.0007);
+    float f = 1.0 - exp(-d * 0.0009);
     float low = smoothstep(uAlt * 0.9, 0.0, w.y) * 0.12;   // street-level smog
     return mix(c, uFog, clamp(f + low, 0.0, 0.95));
   }`;
@@ -175,5 +175,26 @@ export function buildCity(THREE, fog, altitude) {
   }));
   rain.frustumCulled = false;
 
-  return { group, rain, update(t) { U.uTime.value = t; } };
+  // ---- Sky dome: light-polluted horizon fading to a starry night ----
+  const sky = new THREE.Mesh(new THREE.SphereGeometry(3500, 32, 16), new THREE.ShaderMaterial({
+    uniforms: U, side: THREE.BackSide, depthWrite: false,
+    vertexShader: `varying vec3 vD; void main(){ vD = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    fragmentShader: `
+      varying vec3 vD; uniform vec3 uFog;
+      float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+      void main(){
+        vec3 d = normalize(vD);
+        float h = max(d.y, 0.0);
+        vec3 c = mix(uFog, vec3(0.01, 0.008, 0.03), smoothstep(0.0, 0.55, h));
+        c += vec3(0.55, 0.12, 0.5) * exp(-h * 9.0) * 0.35 * step(0.0, d.y);      // city glow
+        vec2 g = vec2(atan(d.z, d.x) * 220.0, d.y * 330.0);
+        float s = step(0.9975, hash(floor(g))) * smoothstep(0.08, 0.4, d.y);
+        c += vec3(0.8, 0.85, 1.0) * s * (0.4 + 0.6 * hash(floor(g) + 7.0));
+        gl_FragColor = vec4(c, 1.0);
+      }`,
+  }));
+  sky.renderOrder = -1; sky.frustumCulled = false;
+  group.add(sky);
+
+  return { group, rain, sky, update(t) { U.uTime.value = t; } };
 }

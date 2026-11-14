@@ -19,16 +19,34 @@ export class Tilt {
     this.lastInput = -99;
     this.now = 0;
     this.drag = null;
+    // 360 look mode: the phone is a viewport you point anywhere.
+    this.look = !new URLSearchParams(location.search).has('portal');
+    this.yaw = 0; this.pitch = -1.0;
+    this.lookQ = new THREE.Quaternion().setFromEuler(new THREE.Euler(this.pitch, 0, 0, 'YXZ'));
+    this.camQ = this.lookQ.clone();   // smoothed camera orientation
+    this.qFix = new THREE.Quaternion(-Math.SQRT1_2, 0, 0, Math.SQRT1_2);
+    this.qScr = new THREE.Quaternion();
+    this.zAxis = new THREE.Vector3(0, 0, 1);
 
     el.addEventListener('pointerdown', (ev) => {
       const n = performance.now();
       if (n - (this.lastTap || 0) < 320) this.recenter();
       this.lastTap = n;
-      if (ev.pointerType !== 'mouse') this.drag = { x: ev.clientX, y: ev.clientY, tx: this.tx, ty: this.ty };
+      if (this.look || ev.pointerType !== 'mouse') this.drag = { x: ev.clientX, y: ev.clientY, tx: this.tx, ty: this.ty };
     });
     window.addEventListener('pointermove', (ev) => {
       if (this.gyroSeen) return;
       const w = window.innerWidth, h = window.innerHeight;
+      if (this.look) {
+        if (!this.drag) return;
+        this.yaw += (ev.clientX - this.drag.x) * 0.005;
+        this.pitch = Math.max(-1.55, Math.min(1.55, this.pitch + (ev.clientY - this.drag.y) * 0.005));
+        this.drag.x = ev.clientX; this.drag.y = ev.clientY;
+        this.euler.set(this.pitch, this.yaw, 0, 'YXZ');
+        this.lookQ.setFromEuler(this.euler);
+        this.lastInput = this.now; this.mode = 'TOUCH';
+        return;
+      }
       if (ev.pointerType === 'mouse') {
         this.tx = -(ev.clientX / w - 0.5) * 1.6;
         this.ty = (ev.clientY / h - 0.5) * 1.6;
@@ -59,6 +77,15 @@ export class Tilt {
   onOrient(ev) {
     if (ev.beta == null || ev.gamma == null) return;
     const r = Math.PI / 180;
+    if (this.look) {
+      // Absolute orientation: camera looks out the back of the phone.
+      const o = ((screen.orientation && screen.orientation.angle) || window.orientation || 0) * r;
+      this.euler.set(ev.beta * r, (ev.alpha || 0) * r, -ev.gamma * r, 'YXZ');
+      this.lookQ.setFromEuler(this.euler).multiply(this.qFix)
+        .multiply(this.qScr.setFromAxisAngle(this.zAxis, -o));
+      this.gyroSeen = true; this.mode = 'GYRO';
+      return;
+    }
     // Device-to-world rotation: Rz(alpha) * Rx(beta) * Ry(gamma)
     this.euler.set(ev.beta * r, ev.gamma * r, (ev.alpha || 0) * r, 'ZXY');
     this.q.setFromEuler(this.euler);
@@ -84,6 +111,14 @@ export class Tilt {
 
   update(dt, t) {
     this.now = t;
+    if (this.look) {
+      if (!this.gyroSeen && t - this.lastInput > 4) {
+        this.euler.set(this.pitch + Math.sin(t * 0.4) * 0.15, this.yaw + Math.sin(t * 0.25) * 0.5, 0, 'YXZ');
+        this.lookQ.setFromEuler(this.euler);
+      }
+      this.camQ.slerp(this.lookQ, 1 - Math.exp(-dt * 14));
+      return;
+    }
     let tx = this.tx, ty = this.ty;
     if (!this.gyroSeen && t - this.lastInput > 4) {
       // Idle demo sway when there is no input at all.

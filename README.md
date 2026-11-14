@@ -8,4 +8,4 @@ Plain static site: Three.js (vendored), no build step. Serve the repo root over 
 
 ## Sprint log
 
-- **Sprint 1 — Portal:** neon city seen through the helicopter floor; gyro-driven off-axis camera (touch/mouse fallback).
+- **Sprint 1 — Portal:** neon city from the helicopter; gyro 360° look camera (default) or off-axis "window" camera (`?portal=1`); touch/mouse fallback.

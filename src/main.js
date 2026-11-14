@@ -1,6 +1,6 @@
 import * as THREE from '../vendor/three.module.min.js';
-import { buildCity } from './city.js?v=3';
-import { Tilt } from './tilt.js?v=3';
+import { buildCity } from './city.js?v=4';
+import { Tilt } from './tilt.js?v=4';
 
 const canvas = document.getElementById('c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
@@ -25,6 +25,7 @@ scene.add(heli);
 const camera = new THREE.PerspectiveCamera();
 camera.matrixAutoUpdate = true;
 rig.add(camera);
+const EYE_HEIGHT = 215;    // 360-look mode: camera height above street
 
 const city = buildCity(THREE, FOG, ALTITUDE);
 scene.add(city.group);
@@ -37,9 +38,10 @@ function resize() {
   const a = w / h;
   if (a < 1) { hw = WINDOW_HALF; hh = WINDOW_HALF / a; }
   else { hh = WINDOW_HALF; hw = WINDOW_HALF * a; }
+  camera.aspect = a; camera.fov = a < 1 ? 75 : 55; camera.near = 2; camera.far = 6000;
+  camera.updateProjectionMatrix();
 }
 window.addEventListener('resize', resize);
-resize();
 
 // Off-axis (asymmetric) frustum through the fixed window rectangle.
 function updatePortal(ex, ey, ez) {
@@ -51,6 +53,8 @@ function updatePortal(ex, ey, ez) {
 }
 
 const tilt = new Tilt(THREE, canvas);
+if (tilt.look) scene.add(camera);   // free camera, not tied to the window rig
+resize();
 const modeEl = document.getElementById('mode');
 const startEl = document.getElementById('start');
 startEl.addEventListener('click', async () => {
@@ -70,9 +74,15 @@ function frame() {
   heli.rotation.y = -t * w;
 
   tilt.update(dt, t);
-  const d = EYE_DIST * WINDOW_HALF;
-  updatePortal(tilt.x * d, tilt.y * d, d);
-  modeEl.textContent = tilt.mode + (tilt.sign > 0 ? ' · EYE' : ' · CAM');
+  if (tilt.look) {
+    camera.position.set(heli.position.x, EYE_HEIGHT, heli.position.z);
+    camera.quaternion.copy(tilt.camQ);
+    city.sky.position.copy(camera.position);
+  } else {
+    const d = EYE_DIST * WINDOW_HALF;
+    updatePortal(tilt.x * d, tilt.y * d, d);
+  }
+  modeEl.textContent = tilt.mode + (tilt.look ? ' · 360' : ' · PORTAL');
 
   city.update(t);
   renderer.render(scene, camera);
