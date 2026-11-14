@@ -31,6 +31,20 @@
   #fill{height:100%;background:#0ff;transform-origin:left;transform:scaleX(0);box-shadow:0 0 10px #0ff}
   #meter.on #fill{background:#ffd24a;box-shadow:0 0 12px #ffb400}
   #meter.on #stat{color:#ffd24a}
+  #timer{color:#fff;font-size:13px}
+  #stat.warn{color:#ff3050;animation:p .5s infinite}
+  #stick{position:fixed;width:90px;height:90px;margin:-45px 0 0 -45px;border:1px solid rgba(160,255,255,.35);border-radius:50%;
+    pointer-events:none;display:none}
+  #stick i{position:absolute;left:50%;top:50%;width:26px;height:26px;margin:-13px;border-radius:50%;background:rgba(0,255,255,.35);
+    box-shadow:0 0 12px #0ff}
+  .ov{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;text-align:center;
+    background:rgba(5,3,13,.78);transition:opacity .5s;padding:0 24px}
+  .ov.off{opacity:0;pointer-events:none}
+  .ov h2{margin:0;font-size:26px;letter-spacing:.14em;color:#fff;text-shadow:0 0 14px #0ff}
+  .ov.lose h2{text-shadow:0 0 14px #f03}
+  .ov p{margin:0;font-size:11px;letter-spacing:.22em;opacity:.8;line-height:1.9}
+  .btn{margin-top:12px;padding:14px 26px;border:1px solid #0ff;font-size:13px;letter-spacing:.3em;cursor:pointer;
+    box-shadow:0 0 18px rgba(0,255,255,.45),inset 0 0 12px rgba(0,255,255,.25)}
   #start{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;
     background:rgba(5,3,13,.72);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);cursor:pointer;transition:opacity .5s}
   #start.off{opacity:0;pointer-events:none}
@@ -45,16 +59,18 @@
 <body>
 <canvas id="c"></canvas>
 <div id="vig"></div>
-<div id="hud"><span>10-43 // AIR-1 · b6</span><span id="mode">STANDBY</span></div>
+<div id="hud"><span>10-43 // AIR-1 · b7</span><span id="timer">1:30</span><span id="mode">STANDBY</span></div>
 <div id="ret"></div>
 <div id="arrow"></div>
 <div id="meter"><div class="row"><span>VISUAL CONTACT</span><span id="stat">NO VISUAL</span></div><div id="bar"><div id="fill"></div></div></div>
-<div id="hint">SPOTLIGHT THE SUSPECT · DOUBLE-TAP TO RECENTER</div>
+<div id="hint">DRAG ◄► ORBIT · ▲▼ ALTITUDE</div>
+<div id="stick"><i></i></div>
+<div id="end" class="ov off"><h2 id="endT"></h2><p id="endS"></p><div id="again" class="btn">RUN IT AGAIN</div></div>
 <div id="start">
   <h1>10<span>43</span>3D</h1>
-  <p>SPRINT 2 · SPOTLIGHT</p>
+  <p>SPRINT 3 · PILOT</p>
   <div id="go">TAP TO START</div>
 </div>
-<script type="module" src="./src/main.js?v=6"></script>
+<script type="module" src="./src/main.js?v=7"></script>
 </body>
 </html>

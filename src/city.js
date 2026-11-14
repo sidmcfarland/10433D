@@ -209,5 +209,26 @@ export function buildCity(THREE, fog, altitude) {
   sky.renderOrder = -1; sky.frustumCulled = false;
   group.add(sky);
 
-  return { group, rain, sky, U, update(t) { U.uTime.value = t; } };
+  // Line of sight: does any building block the segment a -> b?
+  function blocked(ax, ay, az, bx, by, bz) {
+    const dx = bx - ax, dy = by - ay, dz = bz - az;
+    const minx = Math.min(ax, bx), maxx = Math.max(ax, bx), minz = Math.min(az, bz), maxz = Math.max(az, bz);
+    for (let i = 0; i < B.length; i++) {
+      const b = B[i], hw = b.w / 2, hd = b.d / 2;
+      if (b.x + hw < minx || b.x - hw > maxx || b.z + hd < minz || b.z - hd > maxz) continue;
+      let t0 = 0, t1 = 1, ok = true;
+      const slabs = [[ax, dx, b.x - hw, b.x + hw], [ay, dy, 0, b.h], [az, dz, b.z - hd, b.z + hd]];
+      for (const [o, d, lo, hi] of slabs) {
+        if (Math.abs(d) < 1e-9) { if (o < lo || o > hi) { ok = false; break; } continue; }
+        let u0 = (lo - o) / d, u1 = (hi - o) / d;
+        if (u0 > u1) { const q = u0; u0 = u1; u1 = q; }
+        t0 = Math.max(t0, u0); t1 = Math.min(t1, u1);
+        if (t0 > t1) { ok = false; break; }
+      }
+      if (ok) return true;
+    }
+    return false;
+  }
+
+  return { group, rain, sky, U, blocked, update(t) { U.uTime.value = t; } };
 }
