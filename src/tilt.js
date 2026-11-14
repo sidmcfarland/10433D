@@ -6,6 +6,8 @@ export class Tilt {
     this.x = 0; this.y = 0;          // smoothed output
     this.tx = 0; this.ty = 0;        // target
     this.mode = 'STANDBY';
+    // Default: tilt moves the camera (flipped). ?eye=1 restores eye-behind-window mapping.
+    this.sign = new URLSearchParams(location.search).has('eye') ? 1 : -1;
     this.gain = 1.6;                 // exaggerate parallax beyond physical
     this.max = 0.85;
     this.q = new THREE.Quaternion();
@@ -73,8 +75,8 @@ export class Tilt {
     const a = -((screen.orientation && screen.orientation.angle) || window.orientation || 0) * r;
     const c = Math.cos(a), s = Math.sin(a);
     const ex = this.e.x * c - this.e.y * s, ey = this.e.x * s + this.e.y * c;
-    this.tx = ex * this.gain;
-    this.ty = ey * this.gain;
+    this.tx = ex * this.gain * this.sign;
+    this.ty = ey * this.gain * this.sign;
 
     // If held far off-centre, let neutral slowly follow so any posture works.
     if (Math.hypot(ex, ey) > 0.45) this.q0.slerp(this.q, 0.02);
