@@ -9,3 +9,4 @@ Plain static site: Three.js (vendored), no build step. Serve the repo root over 
 ## Sprint log
 
 - **Sprint 1 — Portal:** neon city from the helicopter; gyro 360° look camera (default) or off-axis "window" camera (`?portal=1`); touch/mouse fallback.
+- **Sprint 2 — Spotlight:** AI suspect car on the street grid, view-aimed spotlight, visual-contact meter, off-screen arrow; helicopter auto-circles the suspect.

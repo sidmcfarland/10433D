@@ -1,6 +1,7 @@
 import * as THREE from '../vendor/three.module.min.js';
-import { buildCity } from './city.js?v=4';
-import { Tilt } from './tilt.js?v=4';
+import { buildCity, PITCH, BLOCKS } from './city.js?v=5';
+import { Tilt } from './tilt.js?v=5';
+import { Suspect } from './car.js?v=5';
 
 const canvas = document.getElementById('c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
@@ -10,11 +11,11 @@ const FOG = new THREE.Color(0x0a0618);
 const scene = new THREE.Scene();
 scene.background = FOG;
 
-// --- The "portal": the phone screen is a window in the helicopter floor. ---
-// heli: moves/yaws over the city. rig: window frame, looking straight down.
-const ALTITUDE = 170;      // window plane height above street
+// heli: the helicopter's position over the city. rig: legacy "portal" window frame (?portal=1).
+const ALTITUDE = 170;      // portal window plane height above street
 const WINDOW_HALF = 80;    // half of the window's shorter side, world units
 const EYE_DIST = 2.6;      // eye distance from window, in WINDOW_HALF units
+const EYE_HEIGHT = 215;    // 360-look mode: camera height above street
 const heli = new THREE.Group();
 const rig = new THREE.Group();
 rig.rotation.x = -Math.PI / 2;
@@ -23,13 +24,14 @@ heli.add(rig);
 scene.add(heli);
 
 const camera = new THREE.PerspectiveCamera();
-camera.matrixAutoUpdate = true;
 rig.add(camera);
-const EYE_HEIGHT = 215;    // 360-look mode: camera height above street
 
 const city = buildCity(THREE, FOG, ALTITUDE);
 scene.add(city.group);
 heli.add(city.rain);
+
+const suspect = new Suspect(THREE, PITCH, (BLOCKS / 2 - 2) * PITCH);
+scene.add(suspect.group);
 
 let hw = WINDOW_HALF, hh = WINDOW_HALF;
 function resize() {
@@ -55,12 +57,20 @@ function updatePortal(ex, ey, ez) {
 const tilt = new Tilt(THREE, canvas);
 if (tilt.look) scene.add(camera);   // free camera, not tied to the window rig
 resize();
-const modeEl = document.getElementById('mode');
-const startEl = document.getElementById('start');
+const $ = (id) => document.getElementById(id);
+const modeEl = $('mode'), startEl = $('start'), fillEl = $('fill'), statEl = $('stat'),
+  arrowEl = $('arrow'), retEl = $('ret'), meterEl = $('meter');
 startEl.addEventListener('click', async () => {
   startEl.classList.add('off');
   await tilt.enableGyro();
 }, { once: true });
+
+// --- Spotlight + visual contact ---
+const lamp = city.U.uLamp.value, beam = city.U.uBeam.value;
+const fwd = new THREE.Vector3(), toCar = new THREE.Vector3(), carPos = new THREE.Vector3(), ndc = new THREE.Vector3();
+const focus = new THREE.Vector3();       // smoothed point the helicopter circles
+const COS_HIT = Math.cos(5.2 * Math.PI / 180);
+let contact = 0, lit = 0;
 
 const clock = new THREE.Clock();
 let t = 0;
@@ -68,10 +78,14 @@ function frame() {
   const dt = Math.min(clock.getDelta(), 0.05);
   t += dt;
 
-  // Slow patrol orbit so the world is alive.
-  const R = 260, w = 0.035;
-  heli.position.set(Math.cos(t * w) * R, 0, Math.sin(t * w) * R);
-  heli.rotation.y = -t * w;
+  suspect.update(dt, lit);
+  carPos.set(suspect.x, 1.5, suspect.z);
+
+  // Autopilot: circle loosely above the suspect. (Player flight comes later.)
+  focus.x += (suspect.x - focus.x) * Math.min(1, dt * 0.6);
+  focus.z += (suspect.z - focus.z) * Math.min(1, dt * 0.6);
+  const R = 150, w = 0.05;
+  heli.position.set(focus.x + Math.cos(t * w) * R, 0, focus.z + Math.sin(t * w) * R);
 
   tilt.update(dt, t);
   if (tilt.look) {
@@ -82,7 +96,39 @@ function frame() {
     const d = EYE_DIST * WINDOW_HALF;
     updatePortal(tilt.x * d, tilt.y * d, d);
   }
+  camera.updateMatrixWorld(true);
+
+  // Spotlight swings after the view with a little lag so you can see it move.
+  camera.getWorldPosition(lamp);
+  camera.getWorldDirection(fwd);
+  beam.lerp(fwd, 1 - Math.exp(-dt * 9)).normalize();
+
+  toCar.copy(carPos).sub(lamp);
+  const dist = toCar.length();
+  const cos = toCar.dot(beam) / dist;
+  const inBeam = cos > COS_HIT && dist < 1000;
+  lit += ((inBeam ? 1 : 0) - lit) * Math.min(1, dt * 8);
+  contact = Math.max(0, Math.min(1, contact + (inBeam ? 0.22 : -0.1) * dt));
+
+  // HUD
+  fillEl.style.transform = `scaleX(${contact.toFixed(3)})`;
+  meterEl.classList.toggle('on', inBeam);
+  retEl.classList.toggle('on', inBeam);
+  statEl.textContent = contact >= 1 ? 'SUSPECT LOCKED' : inBeam ? 'VISUAL' : 'NO VISUAL';
   modeEl.textContent = tilt.mode + (tilt.look ? ' · 360' : ' · PORTAL');
+
+  // Edge arrow toward the suspect when it is off screen.
+  ndc.copy(carPos).project(camera);
+  const behind = toCar.dot(fwd) < 0;
+  if (!behind && Math.abs(ndc.x) < 0.92 && Math.abs(ndc.y) < 0.92) arrowEl.style.opacity = 0;
+  else {
+    let ax = ndc.x * camera.aspect, ay = ndc.y;
+    if (behind) { ax = -ax; ay = -ay; }
+    const l = Math.hypot(ax, ay) || 1; ax /= l; ay /= l;
+    const r = Math.min(window.innerWidth, window.innerHeight) * 0.4;
+    arrowEl.style.opacity = 0.9;
+    arrowEl.style.transform = `translate(${(ax * r).toFixed(1)}px,${(-ay * r).toFixed(1)}px) rotate(${Math.atan2(-ay, ax).toFixed(3)}rad)`;
+  }
 
   city.update(t);
   renderer.render(scene, camera);
@@ -91,4 +137,4 @@ function frame() {
 frame();
 
 // Debug hook for automated checks.
-window.__game = { tilt, camera };
+window.__game = { tilt, camera, suspect, get contact() { return contact; }, get lit() { return lit; } };

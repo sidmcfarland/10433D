@@ -1,7 +1,7 @@
 // Procedural neon city: instanced buildings, glowing street grid, beacons, rain.
-const PITCH = 60;      // block + street
+export const PITCH = 60;      // block + street
 const STREET = 16;
-const BLOCKS = 26;     // per side
+export const BLOCKS = 26;     // per side
 
 function rng(seed) {
   let s = seed >>> 0;
@@ -9,7 +9,11 @@ function rng(seed) {
 }
 
 const FOG_GLSL = `
-  uniform vec3 uFog; uniform float uAlt;
+  uniform vec3 uFog; uniform float uAlt; uniform vec3 uLamp; uniform vec3 uBeam;
+  float spot(vec3 w){
+    vec3 v = w - uLamp; float d = length(v);
+    return smoothstep(0.9945, 0.9975, dot(v / d, uBeam)) * clamp(1.0 - d / 1100.0, 0.0, 1.0);
+  }
   vec3 haze(vec3 c, vec3 w){
     float d = length(cameraPosition - w);
     float f = 1.0 - exp(-d * 0.0009);
@@ -19,7 +23,8 @@ const FOG_GLSL = `
 
 export function buildCity(THREE, fog, altitude) {
   const group = new THREE.Group();
-  const U = { uFog: { value: fog }, uAlt: { value: altitude }, uTime: { value: 0 } };
+  const U = { uFog: { value: fog }, uAlt: { value: altitude }, uTime: { value: 0 },
+    uLamp: { value: new THREE.Vector3(0, 200, 0) }, uBeam: { value: new THREE.Vector3(0, -1, 0) } };
   const r = rng(1043);
   const palette = [[0.1, 0.95, 1.0], [1.0, 0.2, 0.9], [1.0, 0.55, 0.1], [0.45, 0.35, 1.0], [0.2, 1.0, 0.55]];
 
@@ -87,6 +92,8 @@ export function buildCity(THREE, fog, altitude) {
           float top = smoothstep(vSize.y - 2.5, vSize.y, vW.y);   // neon crown band
           c = vec3(0.03, 0.025, 0.06) + wc * w * 0.85 + vCol * top * 0.8;
         }
+        float L = spot(vW);
+        c = c * (1.0 + 2.5 * L) + vec3(0.10, 0.11, 0.13) * L;
         gl_FragColor = vec4(haze(c, vW), 1.0);
       }`,
   }), n);
@@ -115,7 +122,7 @@ export function buildCity(THREE, fog, altitude) {
         return mix(mix(hash(i),hash(i+vec2(1,0)),f.x), mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x), f.y); }
       void main(){
         const float P = ${PITCH.toFixed(1)}, S = ${STREET.toFixed(1)};
-        vec2 q = abs(mod(vW.xz, P) - P * 0.5);          // 0 at street centre lines
+        vec2 q = abs(mod(vW.xz + P * 0.5, P) - P * 0.5);          // 0 at street centre lines
         vec2 inStreet = step(q, vec2(S * 0.5));
         float street = max(inStreet.x, inStreet.y);
         float dc = min(q.x, q.y);                        // distance to nearest centre line
@@ -128,6 +135,8 @@ export function buildCity(THREE, fog, altitude) {
         c += street * wet * vec3(0.25, 0.12, 0.5);     // puddle sheen
         c += centre * street * vec3(0.1, 0.9, 1.0) * 1.4;
         c += kerb * vec3(1.0, 0.15, 0.8) * 1.0;
+        float L = spot(vW);
+        c = c * (1.0 + 2.5 * L) + vec3(0.20, 0.22, 0.27) * L;
         gl_FragColor = vec4(haze(c, vW), 1.0);
       }`,
   }));
@@ -167,11 +176,15 @@ export function buildCity(THREE, fog, altitude) {
   rg.setAttribute('aTip', new THREE.BufferAttribute(rt, 1));
   const rain = new THREE.LineSegments(rg, new THREE.ShaderMaterial({
     uniforms: U, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
-    vertexShader: `attribute float aSp; attribute float aTip; uniform float uTime; varying float vA;
+    vertexShader: `attribute float aSp; attribute float aTip; uniform float uTime; uniform vec3 uLamp; uniform vec3 uBeam;
+      varying float vA; varying float vL;
       void main(){ vec3 p = position;
         p.y = mod(p.y - uTime * 150.0 * aSp, ${RH.toFixed(1)}) + aTip * 7.0;
-        vA = aTip; gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0); }`,
-    fragmentShader: `varying float vA; void main(){ gl_FragColor = vec4(vec3(0.55, 0.7, 1.0), 0.28 * (1.0 - vA)); }`,
+        vA = aTip; vec4 w = modelMatrix * vec4(p, 1.0);
+        vec3 v = w.xyz - uLamp; float d = length(v);
+        vL = smoothstep(0.9945, 0.9975, dot(v / d, uBeam)) * smoothstep(8.0, 40.0, d) * clamp(1.0 - d / 700.0, 0.0, 1.0);
+        gl_Position = projectionMatrix * viewMatrix * w; }`,
+    fragmentShader: `varying float vA; varying float vL; void main(){ gl_FragColor = vec4(vec3(0.55, 0.7, 1.0), (0.28 + 0.6 * vL) * (1.0 - vA)); }`,
   }));
   rain.frustumCulled = false;
 
@@ -196,5 +209,5 @@ export function buildCity(THREE, fog, altitude) {
   sky.renderOrder = -1; sky.frustumCulled = false;
   group.add(sky);
 
-  return { group, rain, sky, update(t) { U.uTime.value = t; } };
+  return { group, rain, sky, U, update(t) { U.uTime.value = t; } };
 }
