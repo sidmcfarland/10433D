@@ -1,6 +1,6 @@
 import * as THREE from '../vendor/three.module.min.js';
-import { buildCity } from './city.js';
-import { Tilt } from './tilt.js';
+import { buildCity } from './city.js?v=3';
+import { Tilt } from './tilt.js?v=3';
 
 const canvas = document.getElementById('c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
@@ -72,7 +72,7 @@ function frame() {
   tilt.update(dt, t);
   const d = EYE_DIST * WINDOW_HALF;
   updatePortal(tilt.x * d, tilt.y * d, d);
-  modeEl.textContent = tilt.mode;
+  modeEl.textContent = tilt.mode + (tilt.sign > 0 ? ' · EYE' : ' · CAM');
 
   city.update(t);
   renderer.render(scene, camera);
