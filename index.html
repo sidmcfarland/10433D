@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#05030d">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>10433D</title>
+<style>
+  html,body{margin:0;height:100%;background:#05030d;overflow:hidden;overscroll-behavior:none;
+    font-family:ui-monospace,Menlo,Consolas,monospace;color:#9ff;-webkit-user-select:none;user-select:none;touch-action:none}
+  canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
+  #vig{position:fixed;inset:0;pointer-events:none;
+    background:radial-gradient(ellipse at center,transparent 55%,rgba(0,0,0,.6) 100%)}
+  #hud{position:fixed;left:0;right:0;top:0;padding:calc(env(safe-area-inset-top) + 10px) 14px 0;
+    display:flex;justify-content:space-between;font-size:11px;letter-spacing:.18em;opacity:.75;pointer-events:none;
+    text-shadow:0 0 8px #0ff}
+  #hint{position:fixed;left:0;right:0;bottom:calc(env(safe-area-inset-bottom) + 12px);text-align:center;
+    font-size:10px;letter-spacing:.2em;opacity:.5;pointer-events:none}
+  #start{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;
+    background:rgba(5,3,13,.72);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);cursor:pointer;transition:opacity .5s}
+  #start.off{opacity:0;pointer-events:none}
+  h1{margin:0;font-size:44px;letter-spacing:.12em;color:#fff;text-shadow:0 0 12px #f0f,0 0 32px #0ff}
+  h1 span{color:#ff3df2}
+  #start p{margin:0;font-size:12px;letter-spacing:.3em;opacity:.8}
+  #go{margin-top:14px;padding:14px 28px;border:1px solid #0ff;border-radius:2px;font-size:13px;letter-spacing:.3em;
+    box-shadow:0 0 18px rgba(0,255,255,.45),inset 0 0 12px rgba(0,255,255,.25);animation:p 1.6s infinite}
+  @keyframes p{50%{opacity:.45}}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="vig"></div>
+<div id="hud"><span>10-43 // AIR-1</span><span id="mode">STANDBY</span></div>
+<div id="hint">TILT TO LOOK · DOUBLE-TAP TO RECENTER</div>
+<div id="start">
+  <h1>10<span>43</span>3D</h1>
+  <p>SPRINT 1 · PORTAL</p>
+  <div id="go">TAP TO START</div>
+</div>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
