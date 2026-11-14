@@ -20,7 +20,9 @@ export class Tilt {
     this.now = 0;
     this.drag = null;
     // 360 look mode: the phone is a viewport you point anywhere.
-    this.look = !new URLSearchParams(location.search).has('portal');
+    this.look = true;
+    this.steer = 0;                   // -1..1 steering wheel angle (ground unit)
+    this.enabled = false;
     this.yaw = 0; this.pitch = -1.0;
     this.lookQ = new THREE.Quaternion().setFromEuler(new THREE.Euler(this.pitch, 0, 0, 'YXZ'));
     this.camQ = this.lookQ.clone();   // smoothed camera orientation
@@ -64,6 +66,7 @@ export class Tilt {
   }
 
   async enableGyro() {
+    if (this.enabled) return;
     try {
       const D = window.DeviceOrientationEvent;
       if (!D) return;
@@ -72,6 +75,7 @@ export class Tilt {
         if (r !== 'granted') { this.mode = 'GYRO DENIED'; return; }
       }
       window.addEventListener('deviceorientation', (ev) => this.onOrient(ev));
+      this.enabled = true;
     } catch (e) { this.mode = 'NO GYRO'; }
   }
 
@@ -83,6 +87,15 @@ export class Tilt {
   onOrient(ev) {
     if (ev.beta == null || ev.gamma == null) return;
     const r = Math.PI / 180;
+    {
+      // Steering wheel: how far the screen's "up" is rolled away from world up, in the screen plane.
+      const b = ev.beta * r, g = ev.gamma * r;
+      const ux = -Math.cos(b) * Math.sin(g), uy = Math.sin(b);        // world-up in device coords (x, y)
+      const a = -((screen.orientation && screen.orientation.angle) || window.orientation || 0) * r;
+      const sx = ux * Math.cos(a) - uy * Math.sin(a), sy = ux * Math.sin(a) + uy * Math.cos(a);
+      const ang = Math.atan2(-sx, Math.max(Math.abs(sy), 0.3));
+      this.steer = Math.max(-1, Math.min(1, ang / 0.55));
+    }
     if (this.look) {
       // Absolute orientation: camera looks out the back of the phone.
       const o = ((screen.orientation && screen.orientation.angle) || window.orientation || 0) * r;

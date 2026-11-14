@@ -3,7 +3,7 @@ export class Car {
   constructor(THREE, pitch, limit, { seed = 7, color = 0xff8a00, flee = false, speed = 28 } = {}) {
     this.pitch = pitch; this.limit = limit; this.flee = flee; this.base = speed;
     this.x = 0; this.z = 0; this.dx = 1; this.dz = 0;
-    this.speed = speed; this.lit = 0; this.yaw = 0;
+    this.speed = speed; this.lit = 0; this.yaw = 0; this.threat = null;
     let s = seed >>> 0;
     this.rnd = () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296);
 
@@ -63,8 +63,13 @@ export class Car {
   turn() {
     const { dx, dz, pitch: P, limit: L } = this;
     const evading = this.flee && this.lit > 0.5;
-    const opts = [[dx, dz, evading ? 1 : 2.5], [-dz, dx, 1], [dz, -dx, 1]]
-      .filter(([a, b]) => Math.abs(this.x + a * P) <= L && Math.abs(this.z + b * P) <= L);
+    let opts = [[dx, dz, evading ? 1 : 2.5], [-dz, dx, 1], [dz, -dx, 1]];
+    if (this.threat) {
+      // Being chased on the ground: favour exits that lead away from the pursuer.
+      let ax = this.x - this.threat.x, az = this.z - this.threat.z; const l = Math.hypot(ax, az) || 1; ax /= l; az /= l;
+      opts = opts.map(([a, b]) => [a, b, 0.25 + Math.max(0, a * ax + b * az) * 3]);
+    }
+    opts = opts.filter(([a, b]) => Math.abs(this.x + a * P) <= L && Math.abs(this.z + b * P) <= L);
     if (!opts.length) { this.dx = -dx; this.dz = -dz; return; }
     let r = this.rnd() * opts.reduce((s, o) => s + o[2], 0);
     for (const o of opts) { if ((r -= o[2]) <= 0) { this.dx = o[0]; this.dz = o[1]; return; } }

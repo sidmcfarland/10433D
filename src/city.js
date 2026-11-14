@@ -44,9 +44,9 @@ export function buildCity(THREE, fog, altitude) {
       if (r() < 0.07) h = 95 + r() * 55;              // towers reaching up at the viewer
       const x = cx + (a - (split - 1) / 2) * s, z = cz + (b - (split - 1) / 2) * s;
       const col = palette[(r() * palette.length) | 0];
-      B.push({ x, z, w, d, h, col, seed: r() * 100 });
+      B.push({ x, z, w, d, h, col, seed: Math.floor(r() * 900) });
       if (h > 80 && r() < 0.7) {                      // setback crown
-        B.push({ x, z, w: w * 0.55, d: d * 0.55, h: h + 8 + r() * 14, col, seed: r() * 100 });
+        B.push({ x, z, w: w * 0.55, d: d * 0.55, h: h + 8 + r() * 14, col, seed: Math.floor(r() * 900) });
       }
     }
   }
@@ -69,14 +69,14 @@ export function buildCity(THREE, fog, altitude) {
       ${FOG_GLSL}
       float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
       void main(){
-        vec3 c;
+        vec3 c; float seed = floor(vSeed + 0.5);
         if (vN.y > 0.5) {
           // Roof: dark slab, neon parapet, a few rooftop units.
           vec2 e = min(vUv, 1.0 - vUv) * vSize.xz;
           float edge = min(e.x, e.y);
           float glow = smoothstep(1.6, 0.3, edge) + 0.25 * smoothstep(7.0, 0.0, edge);
           vec2 cell = floor(vUv * vSize.xz / 5.0);
-          float unit = step(0.82, hash(cell + vSeed)) * step(3.0, edge);
+          float unit = step(0.82, hash(cell + seed)) * step(3.0, edge);
           c = vec3(0.025, 0.02, 0.05) + vCol * glow * 0.9 + vec3(0.07, 0.07, 0.1) * unit;
         } else {
           // Walls: window grid in world space so scale never stretches it.
@@ -84,7 +84,7 @@ export function buildCity(THREE, fog, altitude) {
           vec2 g = vec2(u / 2.4, vW.y / 3.2);
           vec2 cell = floor(g), f = fract(g);
           float mask = step(0.18, f.x) * step(f.x, 0.82) * step(0.25, f.y) * step(f.y, 0.8);
-          float rnd = hash(cell + vSeed);
+          float rnd = hash(cell + seed);
           float lit = step(0.5, rnd);
           vec3 wc = mix(vec3(1.0, 0.82, 0.5), vCol, step(0.85, rnd));
           float aa = clamp(fwidth(g.x) * 1.2, 0.0, 1.0);          // fade detail when tiny
@@ -230,5 +230,25 @@ export function buildCity(THREE, fog, altitude) {
     return false;
   }
 
-  return { group, rain, sky, U, blocked, update(t) { U.uTime.value = t; } };
+  // Push a circle (x, z, r) out of any building footprint. Returns null or { x, z, nx, nz }.
+  function collide(x, z, r) {
+    let out = null;
+    for (let i = 0; i < B.length; i++) {
+      const b = B[i], hw = b.w / 2, hd = b.d / 2;
+      const ddx = x - b.x, ddz = z - b.z;
+      if (Math.abs(ddx) > hw + r || Math.abs(ddz) > hd + r) continue;
+      const cx = Math.max(-hw, Math.min(hw, ddx)), cz = Math.max(-hd, Math.min(hd, ddz));
+      let nx = ddx - cx, nz = ddz - cz, d = Math.hypot(nx, nz);
+      if (d >= r) continue;
+      if (d < 1e-6) {                      // centre inside the box: exit through the nearest face
+        const px = hw - Math.abs(ddx), pz = hd - Math.abs(ddz);
+        if (px < pz) { nx = Math.sign(ddx) || 1; nz = 0; x = b.x + nx * (hw + r); }
+        else { nx = 0; nz = Math.sign(ddz) || 1; z = b.z + nz * (hd + r); }
+      } else { nx /= d; nz /= d; x = b.x + cx + nx * r; z = b.z + cz + nz * r; }
+      out = { x, z, nx, nz };
+    }
+    return out;
+  }
+
+  return { group, rain, sky, U, blocked, collide, update(t) { U.uTime.value = t; } };
 }
