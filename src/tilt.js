@@ -27,6 +27,9 @@ export class Tilt {
     this.qFix = new THREE.Quaternion(-Math.SQRT1_2, 0, 0, Math.SQRT1_2);
     this.qScr = new THREE.Quaternion();
     this.zAxis = new THREE.Vector3(0, 0, 1);
+    // Comfort offset: holding the phone at ~45 degrees looks straight down.
+    this.qPitch = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 4);
+    this.alpha0 = null;               // phone heading that maps to "helicopter forward"
 
     el.addEventListener('pointerdown', (ev) => {
       const n = performance.now();
@@ -72,7 +75,10 @@ export class Tilt {
     } catch (e) { this.mode = 'NO GYRO'; }
   }
 
-  recenter() { this.q0 = null; this.tx = 0; this.ty = 0; }
+  recenter() {
+    this.q0 = null; this.tx = 0; this.ty = 0; this.alpha0 = null;
+    if (this.look && !this.gyroSeen) { this.yaw = 0; this.euler.set(this.pitch, 0, 0, 'YXZ'); this.lookQ.setFromEuler(this.euler); }
+  }
 
   onOrient(ev) {
     if (ev.beta == null || ev.gamma == null) return;
@@ -80,9 +86,11 @@ export class Tilt {
     if (this.look) {
       // Absolute orientation: camera looks out the back of the phone.
       const o = ((screen.orientation && screen.orientation.angle) || window.orientation || 0) * r;
-      this.euler.set(ev.beta * r, (ev.alpha || 0) * r, -ev.gamma * r, 'YXZ');
+      const al = (ev.alpha || 0) * r;
+      if (this.alpha0 === null) this.alpha0 = al;
+      this.euler.set(ev.beta * r, al - this.alpha0, -ev.gamma * r, 'YXZ');
       this.lookQ.setFromEuler(this.euler).multiply(this.qFix)
-        .multiply(this.qScr.setFromAxisAngle(this.zAxis, -o));
+        .multiply(this.qScr.setFromAxisAngle(this.zAxis, -o)).multiply(this.qPitch);
       this.gyroSeen = true; this.mode = 'GYRO';
       return;
     }

@@ -1,7 +1,7 @@
 import * as THREE from '../vendor/three.module.min.js';
-import { buildCity, PITCH, BLOCKS } from './city.js?v=5';
-import { Tilt } from './tilt.js?v=5';
-import { Suspect } from './car.js?v=5';
+import { buildCity, PITCH, BLOCKS } from './city.js?v=6';
+import { Tilt } from './tilt.js?v=6';
+import { Suspect } from './car.js?v=6';
 
 const canvas = document.getElementById('c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
@@ -68,7 +68,9 @@ startEl.addEventListener('click', async () => {
 // --- Spotlight + visual contact ---
 const lamp = city.U.uLamp.value, beam = city.U.uBeam.value;
 const fwd = new THREE.Vector3(), toCar = new THREE.Vector3(), carPos = new THREE.Vector3(), ndc = new THREE.Vector3();
-const focus = new THREE.Vector3();       // smoothed point the helicopter circles
+const heliQ = new THREE.Quaternion(), yAxis = new THREE.Vector3(0, 1, 0);
+let heading = 0, turnRate = 0, heliSpeed = 0;   // heading 0 = facing -Z
+heli.position.set(0, 0, 160);
 const COS_HIT = Math.cos(5.2 * Math.PI / 180);
 let contact = 0, lit = 0;
 
@@ -81,16 +83,25 @@ function frame() {
   suspect.update(dt, lit);
   carPos.set(suspect.x, 1.5, suspect.z);
 
-  // Autopilot: circle loosely above the suspect. (Player flight comes later.)
-  focus.x += (suspect.x - focus.x) * Math.min(1, dt * 0.6);
-  focus.z += (suspect.z - focus.z) * Math.min(1, dt * 0.6);
-  const R = 150, w = 0.05;
-  heli.position.set(focus.x + Math.cos(t * w) * R, 0, focus.z + Math.sin(t * w) * R);
+  // Autopilot: turn (slowly, like a helicopter) to keep the suspect dead ahead and fly toward it,
+  // holding a stand-off distance. The view is relative to the helicopter's nose.
+  const hx = suspect.x - heli.position.x, hz = suspect.z - heli.position.z;
+  const hd = Math.hypot(hx, hz);
+  let dh = Math.atan2(-hx, -hz) - heading; dh = Math.atan2(Math.sin(dh), Math.cos(dh));
+  const wantRate = Math.max(-0.75, Math.min(0.75, dh * 1.4));
+  turnRate += (wantRate - turnRate) * Math.min(1, dt * 2.5);
+  heading += turnRate * dt;
+  const wantSpeed = Math.max(-12, Math.min(62, (hd - 100) * 0.7)) * Math.max(0, Math.cos(dh));
+  heliSpeed += (wantSpeed - heliSpeed) * Math.min(1, dt * 1.2);
+  heli.position.x -= Math.sin(heading) * heliSpeed * dt;
+  heli.position.z -= Math.cos(heading) * heliSpeed * dt;
+  heli.rotation.y = heading;
+  heliQ.setFromAxisAngle(yAxis, heading);
 
   tilt.update(dt, t);
   if (tilt.look) {
     camera.position.set(heli.position.x, EYE_HEIGHT, heli.position.z);
-    camera.quaternion.copy(tilt.camQ);
+    camera.quaternion.copy(heliQ).multiply(tilt.camQ);
     city.sky.position.copy(camera.position);
   } else {
     const d = EYE_DIST * WINDOW_HALF;
@@ -137,4 +148,4 @@ function frame() {
 frame();
 
 // Debug hook for automated checks.
-window.__game = { tilt, camera, suspect, get contact() { return contact; }, get lit() { return lit; } };
+window.__game = { tilt, camera, suspect, heli, get heading() { return heading; }, get contact() { return contact; }, get lit() { return lit; } };
